@@ -1,0 +1,26 @@
+# macOS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Local Pico SDK checkout (install separately as documented in README.md)
+/pico-sdk/
+
+# CMake build directories
+build/
+cmake-build-*/
+
+# Generated build products
+*.o
+*.a
+*.elf
+*.map
+*.bin
+*.hex
+*.uf2
+*.dis
+
+# Local editor files
+*.swp
+*.swo
+*~
