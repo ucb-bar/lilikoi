@@ -1,0 +1,86 @@
+; Fletcher Lake 4-bit, FPGA-clocked, decoupled SerialTL physical transport.
+; The FPGA supplies a 5 MHz clock on GP16.  Transfers occur on rising edges.
+
+.pio_version 1
+
+.program serialtl_rx
+; IN base: GP12 (FPGA->MCU data[3:0])
+; JMP pin: GP17 (FPGA->MCU valid)
+; SET pin: GP18 (MCU ready)
+.wrap_target
+rx_start:
+    set pins, 1             ; ready while the RX FIFO has room
+    wait 0 gpio 16
+    wait 1 gpio 16
+    jmp pin capture
+    jmp rx_start
+capture:
+    in pins, 4
+    set pins, 0             ; withdraw ready before a blocking push
+    push block
+.wrap
+
+.program serialtl_tx
+; OUT base: GP32 (MCU->FPGA data[3:0], valid on GP36)
+; JMP pin: GP37 (FPGA ready)
+; GPIO_BASE for this PIO instance is 16, making GP16..47 accessible.
+.wrap_target
+tx_start:
+    pull block              ; bits[3:0] data; bit 4 must be valid=1
+    out pins, 5
+wait_accept:
+    wait 0 gpio 16
+    wait 1 gpio 16
+    jmp pin accepted
+    jmp wait_accept
+accepted:
+    set pins, 0             ; clear data and valid between transfers
+.wrap
+
+% c-sdk {
+static inline void serialtl_rx_program_init(PIO pio, uint sm, uint offset) {
+    const uint data_base = 12;
+    const uint valid_pin = 17;
+    const uint ready_pin = 18;
+
+    for (uint pin = data_base; pin < data_base + 4; ++pin) pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, valid_pin);
+    pio_gpio_init(pio, ready_pin);
+    pio_gpio_init(pio, 16);
+    pio_sm_set_consecutive_pindirs(pio, sm, data_base, 4, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, valid_pin, 1, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, ready_pin, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, 16, 1, false);
+
+    pio_sm_config c = serialtl_rx_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, data_base);
+    sm_config_set_jmp_pin(&c, valid_pin);
+    sm_config_set_set_pins(&c, ready_pin, 1);
+    sm_config_set_in_shift(&c, true, false, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline void serialtl_tx_program_init(PIO pio, uint sm, uint offset) {
+    const uint data_valid_base = 32;
+    const uint ready_pin = 37;
+
+    for (uint pin = data_valid_base; pin < data_valid_base + 5; ++pin) pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, ready_pin);
+    pio_gpio_init(pio, 16);
+    pio_sm_set_consecutive_pindirs(pio, sm, data_valid_base, 5, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, ready_pin, 1, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, 16, 1, false);
+
+    pio_sm_config c = serialtl_tx_program_get_default_config(offset);
+    sm_config_set_out_pins(&c, data_valid_base, 5);
+    sm_config_set_set_pins(&c, data_valid_base, 5);
+    sm_config_set_jmp_pin(&c, ready_pin);
+    sm_config_set_out_shift(&c, true, false, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_pins_with_mask64(pio, sm, 0, 0x1full << data_valid_base);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

@@ -8,6 +8,7 @@
 
 # CMake build directories
 build/
+build-diag/
 cmake-build-*/
 
 # Generated build products
