@@ -25,3 +25,13 @@ cmake-build-*/
 *.swp
 *.swo
 *~
+
+# Lilikoi firmware build and host tooling
+build-lilikoi/
+build-lilikoi-*.log
+host/.venv/
+host/venv.log
+host/uart_tsi/uart_tsi
+host/**/__pycache__/
+host/*.egg-info/
+host/.pytest_cache/

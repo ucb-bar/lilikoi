@@ -1,24 +1,53 @@
 # Lilikoi
 Fletcher Lake control and programming interface API
 
-This project targets the RP2350 on a Raspberry Pi Pico 2 integrated into the Fletcher Lake PCB. Firmware is built using the Pico SDK and programmed over USB using `picotool`.
+Lilikoi is the firmware backend of the Fletcher Lake remote bring-up system. It lets the
+scheduler (`fletcherlake-scheduler`, fl-agent) power, program, run and measure a Fletcher
+Lake board without anyone at the bench. It has two halves:
 
-The production Fletcher Lake board uses the 48-GPIO **RP2350B**, despite older
-bring-up commands referring to `pico2` (RP2350A).  Use the included
-`fletcherlake_rp2350b` board definition for firmware that accesses GPIO32-39.
+| Half | Where | Document |
+|---|---|---|
+| RP2350 firmware: resets, FPGA `DONE`, VCORE regulators, PMIC bus, SerialTL diagnostics | `fletcherlake/lilikoi.c`, `pmic.c` | [`fletcherlake/LILIKOI.md`](fletcherlake/LILIKOI.md) |
+| Mac host tooling: `lilikoi` CLI + per-board daemon, `uart_tsi` (macOS port), OpenOCD cfg, example `cluster.yaml` slot | `host/` | [`host/README.md`](host/README.md) |
+
+```
+fl-agent (scheduler) ──argv──> lilikoi CLI ──> per-board daemon ──┬── USB ──> RP2350 `lilikoi` firmware ──> resets, PMIC, DONE
+                                                                  ├── uart_tsi ──> FPGA UART-TSI ──> load + run ELF, console
+                                                                  └── openocd  ──> JTAG ──> FPGA bitstream
+```
+
+Every chip-specific value (which chip is installed, its approved voltage range, which ports it
+is on) lives in the scheduler's `cluster.yaml` and reaches lilikoi with each command. The
+firmware and daemon store nothing, so swapping the chip is a configuration change.
+
+This project targets the RP2350 on the Fletcher Lake PCB. Firmware is built using the Pico
+SDK and programmed over USB using `picotool`. The production board uses the 48-GPIO
+**RP2350B**, despite older bring-up commands referring to `pico2` (RP2350A). Use the included
+`fletcherlake_rp2350b` board definition for any firmware that accesses GPIO32-39, which
+includes `lilikoi` and `fletcherlake_diag`.
+
+The rest of this file covers the Pico SDK setup shared by every image, then the legacy
+standalone bring-up tools (`hello`, `i2c_check`, `fletcherlake_diag`, `vcore_sweep`). Those
+remain useful for one-off bench diagnostics, but their consoles are interactive and are not
+what the scheduler drives; `lilikoi` supersedes them.
 
 ## 1. Project Structure
 
-Recommended directory layout:
-
 ```text
-~/pico/
-├── pico-sdk/
-└── fletcherlake/
-    ├── CMakeLists.txt
-    ├── pico_sdk_import.cmake
-    ├── main.c
-    └── build/
+pico/
+├── pico-sdk/                      separate SDK checkout
+├── fletcherlake/                  RP2350 firmware
+│   ├── CMakeLists.txt             targets: lilikoi, hello, i2c_check, vcore_sweep, fletcherlake_diag
+│   ├── lilikoi.c, pmic.c, pmic.h  production image (see LILIKOI.md)
+│   ├── serialtl_phy.c, *.pio      4-bit SerialTL transport (shared by lilikoi and fletcherlake_diag)
+│   ├── boards/fletcherlake_rp2350b.h
+│   └── build-*/                   one build dir per configuration
+└── host/                          Mac-side tooling (see host/README.md)
+    ├── lilikoi/                   Python package: cli, daemon, mcu link, tsi, openocd, fakes
+    ├── uart_tsi/                  vendored testchipip uart_tsi with the macOS port
+    ├── openocd/fletcherlake.cfg
+    ├── examples/cluster-board.yaml
+    └── tests/
 ```
 
 The `pico-sdk` directory should be separate from the `fletcherlake` project.
@@ -70,7 +99,10 @@ The unpopulated VIO device at `0x54` is intentionally not checked.
 
 ## 4. Build the Firmware
 
-From the `fletcherlake` directory:
+For the production `lilikoi` image see
+[`fletcherlake/LILIKOI.md`](fletcherlake/LILIKOI.md#build-and-flash); it needs
+`-DPICO_BOARD=fletcherlake_rp2350b`. The legacy tools build as follows, from the
+`fletcherlake` directory:
 
 ```bash
 cmake -S . -B build -DPICO_BOARD=pico2
@@ -94,7 +126,11 @@ build/vcore_sweep.uf2
 Flash `hello.uf2` for the original Hello World, `i2c_check.uf2` for the I2C
 device check, or `vcore_sweep.uf2` for the read-only VCORE register tool.
 
-## Fletcher Lake FPGA and DSP24 diagnostics
+## Legacy tool: Fletcher Lake FPGA and DSP24 diagnostics
+
+> `lilikoi` includes the same reset, `DONE` and SerialTL functions behind its machine
+> protocol (`reset`, `fpga done`, `sertl`). Use `fletcherlake_diag` only when you want the
+> interactive console. The SerialTL pin table below applies to both images.
 
 `fletcherlake_diag` controls the two reset-request nets and implements the
 4-bit RP2350-to-FPGA SerialTL physical transport using two PIO state machines.
@@ -174,7 +210,12 @@ Naichen Zhao tentatively recalls DSP24 reset as active-high; neither the chip
 polarity nor the physical SW7 position has been verified. The firmware's GPIO9
 behavior is independent of that selection.
 
-## VCORE voltage sweep
+## Legacy tool: VCORE voltage sweep
+
+> `lilikoi` carries this regulator driver (`pmic.c`) without the compile-time limits or
+> `arm WRITE` step: chip limits arrive with every `rail set` from the scheduler, and the
+> firmware enforces only PCB bounds. Use `vcore_sweep` for a hand-driven sweep with a
+> measurement prompt at each step.
 
 `vcore_sweep` provides a USB-serial command interface for reading and changing
 the three VCORE regulator setpoints. It supports the TPS6287B20 at `0x45` and
@@ -356,7 +397,7 @@ I2C device check (i2c0, SDA=GP0, SCL=GP1, 100000 Hz)
   [OK     ] ISENSE1       at 0x1f
   [OK     ] VCORE0        at 0x45
   [OK     ] VCORE1        at 0x47
-  [OK     ] VCORE2        at 0x46
+  [OK     ] VCORE2        at 0x40
   [OK     ] VSENSE_PMIC   at 0x48
   [OK     ] VSENSE_VCORE  at 0x49
 I2C result: 7/7 expected devices responded

@@ -1,0 +1,36 @@
+# One Fletcher Lake slot for fl-agent's cluster.yaml (see fletcherlake-scheduler
+# docs/macos-operations.md#firmware-adapter-contract).  Every chip-specific value lives
+# here in device_mapping and reaches the lilikoi CLI as a {placeholder}; the daemon and
+# firmware hold no configuration.  Swapping the chip is `fl cluster setup reconfigure`.
+boards:
+  - board_id: fletcherlake-0
+    backend: lilikoi
+    num_vrails: 3
+    num_vsense: 2
+    num_isense: 2
+    clock_source: fpga
+    fpgas: [{model: xc7k160t}]
+    socs: [{name: dsp24}]            # STANDIN(chip): name the installed chip as Baremetal IDE does
+    firmware_timeout_seconds: 7200   # wait_for_completion shares this deadline; >= longest job
+    device_mapping:
+      mcu: "E6614C311B7A2B32"                     # STANDIN(mcu-serial): `lilikoi discover` / `picotool info` shows it
+      tsi_tty: "/dev/cu.usbserial-FL0TSI"         # STANDIN(uart-tsi-port): where FPGA D23/D24 surface on the Mac
+      jtag_serial: "210299A1B2C3"                 # STANDIN(jtag-serial): adapter serial, omit flag if only one cable
+      openocd_cfg: "/opt/fl/lilikoi/openocd/fletcherlake.cfg"
+      uart_tsi: "/opt/fl/lilikoi/bin/uart_tsi"
+      rail_limits: "650-900,650-900,650-900"      # STANDIN(chip-limits): approved mV range per rail for THIS chip
+      run_dir: "/Library/Application Support/fl/lilikoi"
+    firmware_commands:
+      discover:            [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", --tsi-tty, "{tsi_tty}", --uart-tsi, "{uart_tsi}", --openocd-cfg, "{openocd_cfg}", discover]
+      power_on:            [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", power-on]
+      power_off:           [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", power-off]
+      set_voltage:         [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", --rail-limits, "{rail_limits}", set-voltage, "{rail}", "{volts}"]
+      read_voltage:        [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", read-voltage, "{channel}"]
+      read_current:        [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", read-current, "{channel}"]
+      set_frequency:       [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", set-frequency, "{hz}"]
+      program_fpga:        [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", --openocd-cfg, "{openocd_cfg}", --jtag-serial, "{jtag_serial}", program-fpga, "{bitstream}"]
+      program_soc:         [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", --tsi-tty, "{tsi_tty}", --uart-tsi, "{uart_tsi}", program-soc, "{elf}"]
+      start:               [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", --tsi-tty, "{tsi_tty}", --uart-tsi, "{uart_tsi}", start]
+      stop:                [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", stop]
+      read_uart:           [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", read-uart]
+      wait_for_completion: [lilikoi, --mcu, "{mcu}", --run-dir, "{run_dir}", wait-for-completion]

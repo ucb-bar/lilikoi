@@ -1,0 +1,10 @@
+The files in this directory are vendored from chipyard/generators/testchipip
+(commit 0e910ea, 2026-01-05): uart_tsi/testchip_uart_tsi.{cc,h} and
+src/main/resources/testchipip/csrc/testchip_{tsi,htif}.{cc,h}.
+
+BSD 3-Clause License
+Copyright (c) 2016-2020, The Regents of the University of California (Regents)
+All Rights Reserved.
+
+Local changes are confined to testchip_uart_tsi.cc: macOS baud-rate handling via
+IOSSIOSPEED, 64-bit printf formats, and a write() error check.

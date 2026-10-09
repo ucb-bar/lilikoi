@@ -119,3 +119,39 @@ target_compile_options(fletcherlake_diag PRIVATE -Wall -Wextra -Wformat=2)
 pico_enable_stdio_usb(fletcherlake_diag 1)
 pico_enable_stdio_uart(fletcherlake_diag 0)
 pico_add_extra_outputs(fletcherlake_diag)
+
+# Lilikoi: the single production image driven by fl-agent through host/lilikoi.
+# Requires -DPICO_BOARD=fletcherlake_rp2350b (SerialTL needs the 48-GPIO package).
+set(LILIKOI_PCB_RAIL_MIN_MV "" CACHE STRING "PCB-tolerated VCORE minimum in mV (STANDIN default in pmic.h)")
+set(LILIKOI_PCB_RAIL_MAX_MV "" CACHE STRING "PCB-tolerated VCORE maximum in mV (STANDIN default in pmic.h)")
+
+add_executable(lilikoi
+    lilikoi.c
+    pmic.c
+    serialtl_phy.c
+)
+
+pico_generate_pio_header(lilikoi
+    ${CMAKE_CURRENT_LIST_DIR}/serialtl_phy.pio
+)
+
+target_link_libraries(lilikoi
+    hardware_i2c
+    hardware_pio
+    pico_stdlib
+    pico_unique_id
+)
+
+foreach(bound LILIKOI_PCB_RAIL_MIN_MV LILIKOI_PCB_RAIL_MAX_MV)
+    if(NOT "${${bound}}" STREQUAL "")
+        if(NOT "${${bound}}" MATCHES "^[0-9]+$")
+            message(FATAL_ERROR "${bound} must be an integer number of mV")
+        endif()
+        target_compile_definitions(lilikoi PRIVATE ${bound}=${${bound}})
+    endif()
+endforeach()
+
+target_compile_options(lilikoi PRIVATE -Wall -Wextra -Wformat=2)
+pico_enable_stdio_usb(lilikoi 1)
+pico_enable_stdio_uart(lilikoi 0)
+pico_add_extra_outputs(lilikoi)

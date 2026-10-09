@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lilikoi"
+version = "0.1.0"
+description = "Host-side Fletcher Lake board control for fl-agent's LilikoiBoardBackend"
+requires-python = ">=3.11"
+dependencies = ["pyserial>=3.5,<4"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+lilikoi = "lilikoi.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["lilikoi*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -7,15 +7,7 @@ pico_board_cmake_set(PICO_PLATFORM, rp2350)
 #define FLETCHERLAKE_RP2350B
 #define PICO_RP2350A 0
 
-#ifndef PICO_DEFAULT_UART
-#define PICO_DEFAULT_UART 0
-#endif
-#ifndef PICO_DEFAULT_UART_TX_PIN
-#define PICO_DEFAULT_UART_TX_PIN 0
-#endif
-#ifndef PICO_DEFAULT_UART_RX_PIN
-#define PICO_DEFAULT_UART_RX_PIN 1
-#endif
+/* No default UART: GP0/GP1 are the PMIC I2C bus.  All firmware uses USB stdio. */
 
 #ifndef PICO_DEFAULT_I2C
 #define PICO_DEFAULT_I2C 0
